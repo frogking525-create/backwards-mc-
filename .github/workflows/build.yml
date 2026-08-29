@@ -1,0 +1,33 @@
+name: Build mod jar
+
+on:
+  push:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Grant execute permission for gradlew
+        run: |
+          if [ ! -f "./gradlew" ]; then
+            gradle wrapper --gradle-version 9.5.1
+          fi
+          chmod +x ./gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build --stacktrace
+
+      - name: Upload built jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: backwards-challenge-mod
+          path: build/libs/*.jar
