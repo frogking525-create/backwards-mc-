@@ -26,8 +26,19 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build --stacktrace
 
-      - name: Upload built jar
+      - name: List everything Gradle actually produced (for debugging)
+        run: |
+          echo "--- build/libs contents ---"
+          ls -la build/libs || true
+          echo "--- contents of each jar found ---"
+          for f in build/libs/*.jar; do
+            echo "=== $f ==="
+            unzip -l "$f" | head -30
+          done
+
+      - name: Upload every jar Gradle produced
         uses: actions/upload-artifact@v4
         with:
           name: backwards-challenge-mod
           path: build/libs/*.jar
+          if-no-files-found: error
