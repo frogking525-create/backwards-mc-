@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -40,6 +41,13 @@ public class BackwardsChallengeMod implements ModInitializer {
 
     private static final Map<UUID, ResourceKey<Level>> LAST_DIMENSION = new HashMap<>();
 
+    // Players whose "first join" teleport is still pending. We deliberately do NOT teleport
+    // directly inside the JOIN event - on some setups vanilla finishes placing the player into
+    // its normal initial position on the tick right after JOIN fires, which can silently
+    // override a teleport done during the event itself. Queuing it and applying it on the next
+    // server tick sidesteps that race entirely.
+    private static final Set<UUID> PENDING_INITIAL_SPAWN = new HashSet<>();
+
     // Cached instead of calling player.getServer() (that exact accessor name could not be
     // confirmed against 26.2) - MinecraftServer is handed to us directly and reliably by
     // ServerLifecycleEvents, a well-established Fabric API event.
@@ -53,11 +61,12 @@ public class BackwardsChallengeMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> SERVER = null);
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-                handleJoin(handler.getPlayer(), server));
+                handleJoin(handler.getPlayer()));
 
         ServerPlayerEvents.AFTER_RESPAWN.register(this::handleRespawn);
 
         ServerTickEvents.END_SERVER_TICK.register(this::watchForTrueEnding);
+        ServerTickEvents.END_SERVER_TICK.register(this::processPendingInitialSpawns);
 
         // Tracks "has the dragon been killed" ourselves via a death event, instead of reading
         // vanilla's internal dragon-fight object (whose exact class name/package could not be
@@ -74,21 +83,41 @@ public class BackwardsChallengeMod implements ModInitializer {
     // 1. Initial spawn
     // ---------------------------------------------------------------------------------------
 
-    private void handleJoin(ServerPlayer player, MinecraftServer server) {
+    private void handleJoin(ServerPlayer player) {
+        LOGGER.info("[BackwardsChallenge] {} joined, initialized={}.", player.getName().getString(),
+                player.getAttachedOrElse(ModAttachments.INITIALIZED, Boolean.FALSE));
+
         if (Boolean.TRUE.equals(player.getAttachedOrElse(ModAttachments.INITIALIZED, Boolean.FALSE))) {
             return;
         }
         player.setAttached(ModAttachments.INITIALIZED, Boolean.TRUE);
+        PENDING_INITIAL_SPAWN.add(player.getUUID());
+    }
 
+    private void processPendingInitialSpawns(MinecraftServer server) {
+        if (PENDING_INITIAL_SPAWN.isEmpty()) {
+            return;
+        }
         ServerLevel endWorld = server.getLevel(Level.END);
         if (endWorld == null) {
-            LOGGER.warn("[BackwardsChallenge] End world unavailable on first join, could not redirect spawn.");
+            LOGGER.warn("[BackwardsChallenge] End world unavailable, could not redirect pending spawns.");
+            PENDING_INITIAL_SPAWN.clear();
             return;
         }
 
-        sendPlayerToEndSpawn(player, endWorld);
-        player.sendSystemMessage(Component.literal(
-                "You are starting this world backwards: find the Ender Dragon, then look for a way out."));
+        var iterator = PENDING_INITIAL_SPAWN.iterator();
+        while (iterator.hasNext()) {
+            UUID uuid = iterator.next();
+            iterator.remove();
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player == null) {
+                continue; // disconnected before we got to them
+            }
+            LOGGER.info("[BackwardsChallenge] Redirecting {} to the End spawn platform now.", player.getName().getString());
+            sendPlayerToEndSpawn(player, endWorld);
+            player.sendSystemMessage(Component.literal(
+                    "You are starting this world backwards: find the Ender Dragon, then look for a way out."));
+        }
     }
 
     // ---------------------------------------------------------------------------------------
