@@ -4,6 +4,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 
+import java.util.Random;
+
 /**
  * Terrain scanning + platform construction helpers.
  */
@@ -45,9 +47,57 @@ public final class PlatformUtil {
     }
 
     /**
+     * Builds a rounded, domed end-stone island centered on {@code center}, with its top surface
+     * at {@code center.getY()}. Thickest in the middle (several blocks deep) and tapering to a
+     * single block at the edges, with a jagged (not perfectly circular) coastline so it reads as
+     * a natural outer-End island rather than a platform. Returns the block players should be
+     * teleported to stand on (one block above the surface).
+     */
+    public static BlockPos buildEndIsland(ServerLevel world, BlockPos center, int radius) {
+        Random random = new Random(center.getX() * 341873128712L + center.getZ() * 132897987541L);
+        int maxThickness = Math.max(3, radius / 2 + 1);
+
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                double dist = Math.sqrt((double) (dx * dx) + (double) (dz * dz));
+                if (dist > radius) {
+                    continue; // circular footprint, not a square one
+                }
+                double edgeFactor = dist / radius; // 0 at the center, 1 at the rim
+
+                // Jagged coastline: the further out we are, the more likely this column is
+                // skipped entirely, so the outline isn't a perfect circle.
+                if (edgeFactor > 0.7) {
+                    double skipChance = (edgeFactor - 0.7) / 0.3 * 0.65;
+                    if (random.nextDouble() < skipChance) {
+                        continue;
+                    }
+                }
+
+                // Dome-shaped cross-section: thick in the middle, tapering to a thin edge.
+                int thickness = Math.max(1, (int) Math.round(maxThickness * (1 - edgeFactor * edgeFactor)));
+
+                BlockPos top = center.offset(dx, 0, dz);
+                for (int dy = 0; dy < thickness; dy++) {
+                    world.setBlock(top.below(dy), Blocks.END_STONE.defaultBlockState(), 3);
+                }
+                for (int dy = 1; dy <= 4; dy++) {
+                    world.setBlock(top.above(dy), Blocks.AIR.defaultBlockState(), 3);
+                }
+            }
+        }
+
+        int chunkX = center.getX() >> 4;
+        int chunkZ = center.getZ() >> 4;
+        world.setChunkForced(chunkX, chunkZ, false);
+        return center.above();
+    }
+
+    /**
      * Builds a flat, solid obsidian platform (with the air above it cleared) centered on
      * {@code center}, at {@code center.getY()}. Returns the block players should be teleported
-     * to stand on (one block above the platform surface).
+     * to stand on (one block above the platform surface). Used for the Nether landing pad, which
+     * is meant to read as an obviously artificial safe zone rather than natural terrain.
      */
     public static BlockPos buildFlatPlatform(ServerLevel world, BlockPos center, int radius) {
         for (int dx = -radius; dx <= radius; dx++) {
@@ -87,3 +137,4 @@ public final class PlatformUtil {
         return fallback;
     }
 }
+
