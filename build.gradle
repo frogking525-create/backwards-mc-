@@ -14,6 +14,17 @@ repositories {
     // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
 }
 
+loom {
+    // Tells Loom which source set(s) belong to this mod's packaged jar. Without this, Loom
+    // doesn't know our compiled classes/resources are part of the mod at all, and produces an
+    // (almost) empty jar containing only whatever was added by hand elsewhere in this file.
+    mods {
+        "backwardschallenge" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
