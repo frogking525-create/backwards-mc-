@@ -176,7 +176,7 @@ public class BackwardsChallengeMod implements ModInitializer {
                     ModConstants.END_SEARCH_RADIUS, ModConstants.END_SEARCH_CENTER);
         }
 
-        BlockPos standPos = PlatformUtil.buildFlatPlatform(endWorld, platformCenter, ModConstants.END_PLATFORM_RADIUS);
+        BlockPos standPos = PlatformUtil.buildEndIsland(endWorld, platformCenter, ModConstants.END_PLATFORM_RADIUS);
         teleportAcrossDimensions(player, endWorld, standPos);
     }
 
