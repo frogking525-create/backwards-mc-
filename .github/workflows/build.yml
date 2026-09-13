@@ -28,6 +28,14 @@ jobs:
 
       - name: List everything Gradle actually produced (for debugging)
         run: |
+          echo "--- full build/ directory tree ---"
+          find build -type d | sort
+          echo "--- compiled .class files, if any ---"
+          find build -name "*.class" | head -20
+          echo "--- count of .class files ---"
+          find build -name "*.class" | wc -l
+          echo "--- resources (fabric.mod.json etc), if any ---"
+          find build -name "fabric.mod.json" -o -name "*.mixins.json"
           echo "--- build/libs contents ---"
           ls -la build/libs || true
           echo "--- contents of each jar found ---"
